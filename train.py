@@ -14,13 +14,13 @@ class Train():
         self.G = generator
         self.D = discriminator
         self.optim_g = optim.Adam(self.G.parameters(), lr = 0.0002)
-        self.optim_d = optim.AdamD(self.D.parameters(), lr = 0.0002)
+        self.optim_d = optim.Adam(self.D.parameters(), lr = 0.0002)
         self.d_noise = d_noise
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
         self.dataloader()
 
-        self.fixed_noise = torch.randn(opt.num_test_samples, 100, 1, 1, device=self.device)
+        self.fixed_noise = torch.randn(16, 100, 1, 1, device=self.device)
 
     def dataloader(self):
         standardizator = transforms.Compose([
@@ -57,11 +57,12 @@ class Train():
         for train_img, train_label in self.train_data_loader:
             train_img, train_label = train_img.to(self.device), train_label.to(self.device)
             
-            self.optimizer_d.zero_grad()
-            self.optimizer_g.zero_grad()
+            self.optim_d.zero_grad()
+            self.optim_g.zero_grad()
 
-            p_real = self.D(train_img.view(-1, 28*28))
-            p_fake = self.D(self.G(sample_z(self.d_noise, self.batch_size if len(train_img)==self.batch_size else len(train_img))))
+            p_real = self.D(train_img)
+            noise = sample_z(self.d_noise, self.batch_size if len(train_img)==self.batch_size else len(train_img)).unsqueeze(-1).unsqueeze(-1)
+            p_fake = self.D(self.G(noise))
 
             loss_real = -1 * torch.log(p_real)
             loss_fake = -1 * torch.log(1 - p_fake)
@@ -118,5 +119,5 @@ if __name__=='__main__':
     nc = 1
     G = Generator(nc, nz, ngf)
     D = Discriminator(nc, ndf)
-    train = Train(G, D)
+    train = Train(G, D, nz)
     train.train(num_epoch=1, k=5)
