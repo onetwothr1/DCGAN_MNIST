@@ -29,6 +29,8 @@ class Train():
         self.optim_d = optim.Adam(self.D.parameters(), lr = 0.0002)
         self.d_noise = d_noise
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.G.to(self.device)
+        self.D.to(self.device)
 
         self.dataloader()
 
