@@ -3,6 +3,7 @@ from matplotlib import pyplot as plt
 import torch
 from torchvision.utils import make_grid
 import math
+import itertools
 
 def plot(train_loss_d, train_loss_g, p_real, p_fake):
   fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12,4))
@@ -20,9 +21,6 @@ def plot(train_loss_d, train_loss_g, p_real, p_fake):
   ax2.legend(bbox_to_anchor=(0.9, 1), loc=2, borderaxespad=0.)
 
   plt.show()
-
-def sample_z(d_noise, batch_size=1, device='cpu'):
-  return torch.randn(batch_size, d_noise, device=device)
 
 def imshow(img):
     img = (img+1)/2    

@@ -10,6 +10,9 @@ from model import Generator, Discriminator
 from utils import *
 
 
+def sample_z(d_noise, batch_size, device):
+    return torch.randn(batch_size, d_noise, device=device)
+
 def he_initialization(parameters, activation, negative_slope=0):
     for param in parameters:
         if len(param.size()) > 1:
@@ -31,6 +34,7 @@ class Train():
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.G.to(self.device)
         self.D.to(self.device)
+        print("NEW!")
 
         self.dataloader()
 
@@ -52,30 +56,32 @@ class Train():
     def run_epoch_G(self):
         train_loss_g = 0
             
-        for _, _ in self.train_data_loader:
-            self.optimizer_g.zero_grad()
+        for train_img, train_label in tqdm(self.train_data_loader):
+            self.optim_g.zero_grad()
 
-            p_fake = self.D(self.G(sample_z(self.d_noise, self.batch_size)))
+            noise = sample_z(self.d_noise, self.batch_size if len(train_img)==self.batch_size else len(train_img), self.device).unsqueeze(-1).unsqueeze(-1)
+            p_fake = self.D(self.G(noise))
 
             loss_g = -1 * torch.log(p_fake).mean()
             loss_g.backward()
             self.optim_g.step()
 
             train_loss_g += loss_g
+            break
 
         return train_loss_g / len(self.train_data_loader)
     
     def run_epoch_D(self):
         train_loss_d = 0
 
-        for train_img, train_label in self.train_data_loader:
+        for train_img, train_label in tqdm(self.train_data_loader):
             train_img, train_label = train_img.to(self.device), train_label.to(self.device)
             
             self.optim_d.zero_grad()
             self.optim_g.zero_grad()
 
             p_real = self.D(train_img)
-            noise = sample_z(self.d_noise, self.batch_size if len(train_img)==self.batch_size else len(train_img)).unsqueeze(-1).unsqueeze(-1)
+            noise = sample_z(self.d_noise, self.batch_size if len(train_img)==self.batch_size else len(train_img), self.device).unsqueeze(-1).unsqueeze(-1)
             p_fake = self.D(self.G(noise))
 
             loss_real = -1 * torch.log(p_real)
@@ -85,17 +91,19 @@ class Train():
             self.optim_d.step()
 
             train_loss_d += loss_d
+            break
 
         return train_loss_d / len(self.train_data_loader)
 
-    def evaluate(self, generator, discriminator):
+    def evaluate(self):
         p_real, p_fake = 0., 0.
         for test_img, test_label in self.test_data_loader:
             test_img, test_label = test_img.to(self.device), test_label.to(self.device)
 
             with torch.autograd.no_grad():
-                p_real += (torch.sum(discriminator(test_img.view(-1, 28*28))).item())
-                p_fake += (torch.sum(discriminator(generator(sample_z(self.d_noise, self.batch_size)))).item())
+                p_real += (torch.sum(self.D(test_img)).item())
+                noise = sample_z(self.d_noise, self.batch_size if len(test_img)==self.batch_size else len(test_img), self.device).unsqueeze(-1).unsqueeze(-1)
+                p_fake += (torch.sum(self.D(self.G(noise))).item())
             
         return p_real / len(self.test_data_loader.dataset), p_fake / len(self.test_data_loader.dataset)
 
@@ -105,7 +113,8 @@ class Train():
         p_real_list = []
         p_fake_list = []
         
-        for epoch in tqdm(range(1, num_epoch+1)):
+        for epoch in range(1, num_epoch+1):
+            print(f"Epoch {epoch}")
             for _ in range(k):
                 train_loss_d = self.run_epoch_D()
             train_loss_g = self.run_epoch_G()

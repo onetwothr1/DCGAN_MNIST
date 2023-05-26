@@ -55,6 +55,6 @@ class Discriminator(nn.Module):
     )
 
   def forward(self, x):
-    print(x.size())
-    print(self.layers(x).size())
+    # print(x.size())
+    # print(self.layers(x).size())
     return self.layers(x).squeeze()
