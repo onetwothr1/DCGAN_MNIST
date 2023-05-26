@@ -1,4 +1,5 @@
 import torch
+import torch.nn
 import torch.optim as optim
 import torchvision.datasets as dsets
 import torchvision.transforms as transforms
@@ -9,10 +10,21 @@ from model import Generator, Discriminator
 from utils import *
 
 
+def he_initialization(parameters, activation, negative_slope=0):
+    for param in parameters:
+        if len(param.size()) > 1:
+            nn.init.kaiming_uniform_(param, mode='fan_in', nonlinearity=activation, a=negative_slope)
+        else:
+            nn.init.zeros_(param)
+
+
 class Train():
     def __init__(self, generator, discriminator, d_noise):
         self.G = generator
         self.D = discriminator
+        he_initialization(self.G.parameters(), 'relu')
+        he_initialization(self.D.parameters(), 'leaky_relu', 0)
+
         self.optim_g = optim.Adam(self.G.parameters(), lr = 0.0002)
         self.optim_d = optim.Adam(self.D.parameters(), lr = 0.0002)
         self.d_noise = d_noise
