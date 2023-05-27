@@ -1,5 +1,4 @@
 import torch
-import torch.nn as nn
 import torch.optim as optim
 import torchvision.datasets as dsets
 import torchvision.transforms as transforms
@@ -8,14 +7,6 @@ from tqdm import tqdm
 
 from model import Generator, Discriminator
 from utils import *
-
-
-def he_initialization(parameters, activation, negative_slope=0):
-    for param in parameters:
-        if len(param.size()) > 1:
-            nn.init.kaiming_uniform_(param, mode='fan_in', nonlinearity=activation, a=negative_slope)
-        else:
-            nn.init.zeros_(param)
 
 
 class Train():
@@ -31,12 +22,10 @@ class Train():
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.G.to(self.device)
         self.D.to(self.device)
-        # print("NEW!")
 
         self.dataloader()
 
         self.fixed_noise = torch.randn(64, 100, 1, 1, device=self.device)
-
 
     def sample_z(self, batch_size):
         return torch.randn(batch_size, self.d_noise, device=self.device).unsqueeze(-1).unsqueeze(-1)
@@ -118,20 +107,25 @@ class Train():
         
         for epoch in range(1, num_epoch+1):
             print(f"Epoch {epoch}")
-            # for _ in range(k):
-            #     train_loss_d = self.run_epoch_D()
-            # train_loss_g = self.run_epoch_G()
+            for _ in range(k):
+                train_loss_d = self.run_epoch_D()
+            train_loss_g = self.run_epoch_G()
 
             p_real, p_fake = self.evaluate()
 
-            # train_loss_d_list.append(train_loss_d)
-            # train_loss_g_list.append(train_loss_g)
-            # p_real_list.append(p_real)
-            # p_fake_list.append(p_fake)
+            train_loss_d_list.append(train_loss_d)
+            train_loss_g_list.append(train_loss_g)
+            p_real_list.append(p_real)
+            p_fake_list.append(p_fake)
             
-            generate_images(epoch, 'images/', self.fixed_noise, 64, self.d_noise, self.G, self.device, use_fixed=True)
-
-        # return train_loss_d_list, train_loss_g_list, p_real_list, p_fake_list
+            generate_images(epoch, 'images/', self.fixed_noise, 64, self.G)
+        
+        # save
+        torch.save(self.G.state_dict(), f'generator epoch {epoch}.pth')
+        torch.save(self.D.state_dict(), f'discriminator epoch {epoch}.pth')
+        save_graph(train_loss_d_list, train_loss_g_list, p_real_list, p_fake_list, "graph.png")
+        
+        return train_loss_d_list, train_loss_g_list, p_real_list, p_fake_list
 
 
 if __name__=='__main__':
@@ -142,4 +136,4 @@ if __name__=='__main__':
     G = Generator(nc, nz, ngf)
     D = Discriminator(nc, ndf)
     train = Train(G, D, nz)
-    train.train(num_epoch=1, k=5)
+    train.train(num_epoch=100, k=2)
