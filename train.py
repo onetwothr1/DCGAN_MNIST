@@ -10,9 +10,6 @@ from model import Generator, Discriminator
 from utils import *
 
 
-def sample_z(d_noise, batch_size, device):
-    return torch.randn(batch_size, d_noise, device=device)
-
 def he_initialization(parameters, activation, negative_slope=0):
     for param in parameters:
         if len(param.size()) > 1:
@@ -34,11 +31,15 @@ class Train():
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.G.to(self.device)
         self.D.to(self.device)
-        print("NEW!")
+        # print("NEW!")
 
         self.dataloader()
 
-        self.fixed_noise = torch.randn(16, 100, 1, 1, device=self.device)
+        self.fixed_noise = torch.randn(64, 100, 1, 1, device=self.device)
+
+
+    def sample_z(self, batch_size):
+        return torch.randn(batch_size, self.d_noise, device=self.device).unsqueeze(-1).unsqueeze(-1)
 
     def dataloader(self):
         standardizator = transforms.Compose([
@@ -52,6 +53,7 @@ class Train():
         self.batch_size = 256
         self.train_data_loader = DataLoader(train_data, self.batch_size, shuffle=True)
         self.test_data_loader = DataLoader(test_data, self.batch_size, shuffle=True)
+        print("finished getting data")
 
     def run_epoch_G(self):
         train_loss_g = 0
@@ -59,7 +61,7 @@ class Train():
         for train_img, train_label in tqdm(self.train_data_loader):
             self.optim_g.zero_grad()
 
-            noise = sample_z(self.d_noise, self.batch_size if len(train_img)==self.batch_size else len(train_img), self.device).unsqueeze(-1).unsqueeze(-1)
+            noise = self.sample_z(self.batch_size if len(train_img)==self.batch_size else len(train_img))
             p_fake = self.D(self.G(noise))
 
             loss_g = -1 * torch.log(p_fake).mean()
@@ -81,7 +83,7 @@ class Train():
             self.optim_g.zero_grad()
 
             p_real = self.D(train_img)
-            noise = sample_z(self.d_noise, self.batch_size if len(train_img)==self.batch_size else len(train_img), self.device).unsqueeze(-1).unsqueeze(-1)
+            noise = self.sample_z(self.batch_size if len(train_img)==self.batch_size else len(train_img))
             p_fake = self.D(self.G(noise))
 
             loss_real = -1 * torch.log(p_real)
@@ -102,8 +104,9 @@ class Train():
 
             with torch.autograd.no_grad():
                 p_real += (torch.sum(self.D(test_img)).item())
-                noise = sample_z(self.d_noise, self.batch_size if len(test_img)==self.batch_size else len(test_img), self.device).unsqueeze(-1).unsqueeze(-1)
+                noise = self.sample_z(self.batch_size if len(test_img)==self.batch_size else len(test_img))
                 p_fake += (torch.sum(self.D(self.G(noise))).item())
+            break
             
         return p_real / len(self.test_data_loader.dataset), p_fake / len(self.test_data_loader.dataset)
 
@@ -115,24 +118,20 @@ class Train():
         
         for epoch in range(1, num_epoch+1):
             print(f"Epoch {epoch}")
-            for _ in range(k):
-                train_loss_d = self.run_epoch_D()
-            train_loss_g = self.run_epoch_G()
+            # for _ in range(k):
+            #     train_loss_d = self.run_epoch_D()
+            # train_loss_g = self.run_epoch_G()
 
             p_real, p_fake = self.evaluate()
 
-            train_loss_d_list.append(train_loss_d)
-            train_loss_g_list.append(train_loss_g)
-            p_real_list.append(p_real)
-            p_fake_list.append(p_fake)
+            # train_loss_d_list.append(train_loss_d)
+            # train_loss_g_list.append(train_loss_g)
+            # p_real_list.append(p_real)
+            # p_fake_list.append(p_fake)
             
-            generate_images(epoch, '/images/', self.fixed_noise, 16, self.G, self.device, use_fixed=True)
-            
-            if(epoch % 25 == 0):
-                print('(epoch %i/200) p_real: %f, p_g: %f' % (epoch+1, p_real, p_fake))
-                imshow_grid(G(sample_z(16)).view(-1, 1, 28, 28))
+            generate_images(epoch, 'images/', self.fixed_noise, 64, self.d_noise, self.G, self.device, use_fixed=True)
 
-        return train_loss_d_list, train_loss_g_list, p_real_list, p_fake_list
+        # return train_loss_d_list, train_loss_g_list, p_real_list, p_fake_list
 
 
 if __name__=='__main__':
