@@ -1,7 +1,11 @@
-import torch.nn as nn
+# import torch
+# import torch.nn as nn
 import numpy as np
 from matplotlib import pyplot as plt
 from PIL import Image
+from glob import glob
+import imageio
+import natsort
 import math
 
 def he_initialization(parameters, activation, negative_slope=0):
@@ -11,22 +15,27 @@ def he_initialization(parameters, activation, negative_slope=0):
         else:
             nn.init.zeros_(param)
 
+def make_fixed_noise(num_sample, d_noise, device):
+    noise = torch.randn(num_sample, d_noise, 1, 1, device=device)
+    torch.save(noise, 'fixed_noise.pt')
+    
 def save_graph(train_loss_d, train_loss_g, p_real, p_fake, path):
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12,4))    
 
     ax1.plot(train_loss_d, label='D train loss')
     ax1.plot(train_loss_g, label='G train loss')
     ax1.set_xlabel('epoch')
-    ax1.set_xlabel('loss')
-    ax1.legend(bbox_to_anchor=(0.8, 1), loc=2, borderaxespad=0.)
+    ax1.legend(bbox_to_anchor=(0.7, 1), loc=2, borderaxespad=0.)
 
     ax2.plot(p_real, label='p_real')
     ax2.plot(p_fake, label='p_fake')
     ax2.set_xlabel('epoch')
-    ax2.set_ylabel('p')
-    ax2.legend(bbox_to_anchor=(0.9, 1), loc=2, borderaxespad=0.)
+    ax2.set_ylim(0, 1)
+    ax2.legend(bbox_to_anchor=(0.76, 1), loc=2, borderaxespad=0.)
 
+    plt.show()
     plt.savefig(path)
+    plt.close()
 
 def image_resize(image, image_size, k):
     resized = np.zeros((image_size * k, image_size * k))
@@ -35,9 +44,11 @@ def image_resize(image, image_size, k):
             resized[i*k : (i+1)*k,  j*k : (j+1)*k] = image[i][j]
     return resized
 
-def generate_images(epoch, path, fixed_noise, num_test_samples, netG):
+def generate_images(text, path, fixed_noise, num_test_samples, netG, show=False):
+    # output of generator
     generated_fake_images = netG(fixed_noise)
   
+    # draw images in a grid (without compression loss)
     grid_size = int(math.sqrt(num_test_samples))
     image_size = 28
     resize_factor = 3
@@ -50,8 +61,7 @@ def generate_images(epoch, path, fixed_noise, num_test_samples, netG):
     count = 0
     for i in range(grid_size):
         for j in range(grid_size):
-            image = generated_fake_images[count].squeeze().detach().numpy()
-            # image = (image * 255).astype(np.uint8) # to integer
+            image = generated_fake_images[count].squeeze().detach().cpu().numpy()
             image_resized = image_resize(image, image_size, resize_factor)
 
             start_row = outer_margin + i * (scaled_image_size + padding)
@@ -63,15 +73,20 @@ def generate_images(epoch, path, fixed_noise, num_test_samples, netG):
     canvas = (canvas * 255).astype(np.uint8)
 
     # draw text (epoch number)
-    text_img = text_image(f'Epoch {epoch}', (canvas_size, 100), 30, path)
+    height = 100
+    text_img = text_image(text, (canvas_size, height), 30)
 
     # concat image and text
     combined_image = np.concatenate((text_img, canvas), axis=0)
-    combined_image_path = path + f'Epoch {epoch}.png'
+    combined_image_path = path + text + '.png'
+    
     plt.imsave(combined_image_path, combined_image, cmap='gray')
+    if show:
+        plt.imshow(Image.fromarray(canvas), cmap='gray')
+        plt.show()
+        plt.close()
 
-
-def text_image(text, image_size, font_size, path):
+def text_image(text, image_size, font_size):
     # Create a blank figure with the desired size
     fig, ax = plt.subplots(figsize=(image_size[0] / 100, image_size[1] / 100))
 
@@ -103,20 +118,15 @@ def text_image(text, image_size, font_size, path):
     # Convert the image mode to grayscale
     resized_image = resized_image.convert("L")
 
+    plt.close()
+
     return np.array(resized_image)
 
-def save_gif(path, fps, fixed_noise=False):
-    '''
-    reference: https://github.com/AKASHKADEL/dcgan-mnist
-    '''
-    if fixed_noise==True:
-        path += 'fixed_noise/'
-    else:
-        path += 'variable_noise/'
+def save_gif(path, fps, last):
     images = glob(path + '*.png')
     images = natsort.natsorted(images)
+    images += [images[-1] for _ in range(last)]
     gif = []
-
     for image in images:
-        gif.append(imageio.imread(image))
-    imageio.mimsave(path+'animated.gif', gif, fps=fps)
+        gif.append(imageio.v2.imread(image))
+    imageio.mimsave(path+'animated.gif', gif, duration=1000/fps, loop=0)
